@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const cors = require('cors');
 const app = express();
+const axios = require('axios');
 // const students=require('./array.js')
 
 app.use(cors());
@@ -17,11 +18,10 @@ const MAX_RECORDS = 20000;
 
 
 
-  app.get('/students', async (req, res) => {
-    try {
-      // Fetch all students from the database
-      let offset = 0;
-      let allStudents = [];
+app.get('/students', async (req, res) => {
+  try {
+    let offset = 0;
+    let allStudents = [];
 
     while (allStudents.length < MAX_RECORDS) {
       // Fetch the next chunk of records
@@ -60,13 +60,26 @@ const MAX_RECORDS = 20000;
 
     // Limit the total number of records to MAX_RECORDS
     allStudents = allStudents.slice(0, MAX_RECORDS);
-  
-      res.status(200).json(allStudents);
-    } catch (error) {
-      console.error('Error fetching students:', error);
-      res.status(500).json({ error: 'Something went wrong while fetching students.' });
-    }
-  });
+
+    // Send the data to the external API that returns an Excel file
+    const response = await axios.post("https://server-2-two.vercel.app/download-xlsx", allStudents, {
+      responseType: 'arraybuffer', // Important to handle binary data like Excel files
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Set the correct headers for Excel file download
+    res.setHeader('Content-Disposition', 'attachment; filename=students.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    
+    // Send the file to the client
+    res.status(200).send(response.data);
+  } catch (error) {
+    console.error('Error fetching students or sending data to external API:', error);
+    res.status(500).json({ error: 'Something went wrong while fetching students or generating Excel file.' });
+  }
+})
 
 // Start the server
 app.listen(8000, () => {
